@@ -32,12 +32,11 @@ export default function Home() {
         // ПРЯМАЯ ЗАПИСЬ В SUPABASE ВМЕСТО FETCH API
         const { error } = await supabase
             .from('device_requests')
-            .insert({
-                user_id: user ? user.id : null,
-                name: reqName,
-                notes: reqNotes
-            })
-
+.insert({
+    user_id: user ? user.id : null,
+    name: reqName,
+    notes: reqNotes
+})
         if (!error) {
             alert("Запрос успешно отправлен.")
             setShowModal(false); 
