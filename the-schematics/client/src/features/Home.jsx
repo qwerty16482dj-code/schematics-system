@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Link } from 'react-router-dom'
-import { API_URL } from '../config' // <-- ВАЖНО: ИМПОРТ КОНФИГА
 
 export default function Home() {
   const [devices, setDevices] = useState([])
@@ -30,20 +29,27 @@ export default function Home() {
     if (!reqName) return
 
     try {
-        // ИСПОЛЬЗУЕМ API_URL
-        const res = await fetch(`${API_URL}/api/request-device`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: user ? user.id : null, name: reqName, notes: reqNotes })
-        })
+        // ПРЯМАЯ ЗАПИСЬ В SUPABASE ВМЕСТО FETCH API
+        const { error } = await supabase
+            .from('device_requests')
+            .insert({
+                user_id: user ? user.id : null,
+                name: reqName,
+                notes: reqNotes
+            })
 
-        const result = await res.json()
-        if (result.success) {
+        if (!error) {
             alert("Запрос успешно отправлен.")
-            setShowModal(false); setReqName(''); setReqNotes('')
+            setShowModal(false); 
+            setReqName(''); 
+            setReqNotes('')
         } else {
-            alert("Ошибка отправки запроса")
+            console.error(error)
+            alert("Ошибка сохранения запроса в базе данных.")
         }
-    } catch (e) { alert("Сервер недоступен") }
+    } catch (e) { 
+        alert("Произошла системная ошибка") 
+    }
   }
 
   return (

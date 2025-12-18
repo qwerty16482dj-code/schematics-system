@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useNavigate } from 'react-router-dom'
-import { API_URL } from '../../config' // <-- ВАЖНО: ПРАВИЛЬНЫЙ ИМПОРТ
 
 export default function WikiPanel({ categoryId, categoryName }) {
   const [content, setContent] = useState('')
@@ -10,28 +9,30 @@ export default function WikiPanel({ categoryId, categoryName }) {
   const [history, setHistory] = useState([])
   const [user, setUser] = useState(null)
   
-  // Для формы правки
   const [editContent, setEditContent] = useState('')
   const [editComment, setEditComment] = useState('')
 
   const navigate = useNavigate()
 
   useEffect(() => {
-    // 1. Проверяем пользователя
     supabase.auth.getUser().then(({ data }) => setUser(data.user))
-    
-    // 2. Грузим статью
     loadArticle()
   }, [categoryId])
 
   async function loadArticle() {
     setLoading(true)
     try {
-        // ИСПОЛЬЗУЕМ API_URL
-        const res = await fetch(`${API_URL}/api/wiki/${categoryId}`)
-        const data = await res.json()
-        setContent(data.article?.content || '')
-        setEditContent(data.article?.content || '') 
+        // Читаем статью напрямую из Supabase
+        const { data, error } = await supabase
+            .from('wiki_articles')
+            .select('content')
+            .eq('category_id', categoryId)
+            .maybeSingle()
+
+        if (error) throw error;
+
+        setContent(data?.content || '')
+        setEditContent(data?.content || '') 
     } catch (e) {
         console.error("Ошибка загрузки вики:", e)
     }
@@ -39,36 +40,56 @@ export default function WikiPanel({ categoryId, categoryName }) {
   }
 
   async function loadHistory() {
-    // ИСПОЛЬЗУЕМ API_URL
-    const res = await fetch(`${API_URL}/api/wiki/history/${categoryId}`)
-    const data = await res.json()
-    setHistory(data.history || [])
-    setMode('HISTORY')
+    try {
+        // Читаем историю напрямую из Supabase
+        const { data, error } = await supabase
+            .from('wiki_history')
+            .select('*')
+            .eq('category_id', categoryId)
+            .order('created_at', { ascending: false })
+
+        if (error) throw error;
+        setHistory(data || [])
+        setMode('HISTORY')
+    } catch (e) {
+        console.error("Ошибка загрузки истории:", e)
+    }
   }
 
   const handleSave = async () => {
     if (!user) return alert("Войдите в систему, чтобы править Вики!")
     if (!editComment) return alert("Напишите комментарий к правке")
 
-    // ИСПОЛЬЗУЕМ API_URL
-    const res = await fetch(`${API_URL}/api/wiki/save`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            catId: categoryId,
-            content: editContent,
-            userId: user.id,
-            userEmail: user.email,
-            comment: editComment
-        })
-    })
-    
-    const result = await res.json()
-    if (result.success) {
+    try {
+        // 1. Обновляем или создаем статью
+        const { error: articleError } = await supabase
+            .from('wiki_articles')
+            .upsert({ 
+                category_id: categoryId, 
+                content: editContent,
+                updated_at: new Date()
+            }, { onConflict: 'category_id' })
+
+        if (articleError) throw articleError;
+
+        // 2. Записываем действие в историю
+        const { error: historyError } = await supabase
+            .from('wiki_history')
+            .insert({
+                category_id: categoryId,
+                content: editContent,
+                user_id: user.id,
+                user_email: user.email,
+                comment: editComment
+            })
+
+        if (historyError) throw historyError;
+
         loadArticle()
         setMode('READ')
         setEditComment('')
-    } else {
-        alert("Ошибка сохранения: " + (result.error || 'Unknown'))
+    } catch (e) {
+        alert("Ошибка сохранения: " + e.message)
     }
   }
 
@@ -104,8 +125,6 @@ export default function WikiPanel({ categoryId, categoryName }) {
       {/* --- MODE: EDIT --- */}
       {mode === 'EDIT' && (
         <div className="flex-1 flex flex-col gap-2 relative">
-            
-            {/* ЕСЛИ НЕ ВОШЕЛ - БЛОКИРУЕМ И ПОКАЗЫВАЕМ КНОПКУ */}
             {!user ? (
                 <div className="absolute inset-0 bg-zinc-900/95 z-10 flex flex-col items-center justify-center text-center p-4">
                     <div className="text-red-500 font-bold mb-2 text-xs uppercase tracking-widest">ДОСТУП ЗАПРЕЩЕН</div>
