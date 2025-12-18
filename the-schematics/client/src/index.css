@@ -1,0 +1,63 @@
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Глобальные стили "Терминала" */
+body {
+  background-color: #050b14; /* Глубокий черный цвет */
+  color: #a5b4fc;
+  font-family: 'Share Tech Mono', monospace; /* Наш новый шрифт */
+  overflow: hidden; /* Убираем скролл страницы */
+}
+
+/* Эффект сетки на фоне */
+.bg-grid {
+  background-size: 40px 40px;
+  background-image: 
+    linear-gradient(to right, rgba(34, 211, 238, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(34, 211, 238, 0.05) 1px, transparent 1px);
+}
+
+/* Кастомный скроллбар */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0f172a; 
+}
+::-webkit-scrollbar-thumb {
+  background: #1e293b; 
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #334155; 
+}
+/* --- CYBERPUNK SCROLLBAR --- */
+
+/* Для Chrome, Edge, Safari */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #050b14; 
+  border-left: 1px solid #1e293b;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #0891b2; /* cyan-600 */
+  border-radius: 0;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #22d3ee; /* cyan-400 */
+}
+
+/* Принудительно разрешаем скролл для body, если он был заблокирован */
+body {
+  overflow-y: auto !important;
+  overflow-x: hidden;
+}
