@@ -19,44 +19,55 @@ export default function RuleManager() {
   }, [])
 
   async function fetchData() {
+    // Грузим категории для выпадающего списка
     const { data: cats } = await supabase.from('part_categories').select('*').order('name')
     setCategories(cats || [])
     if (cats?.length) {
         setNewRule(prev => ({ ...prev, catA: cats[0].id, catB: cats[0].id }))
     }
 
-    const { data: rls } = await supabase.from('assembly_rules').select('*')
+    // Грузим существующие правила (с новыми колонками)
+    const { data: rls } = await supabase.from('assembly_rules').select('*').order('id', { ascending: false })
     setRules(rls || [])
   }
 
+  // --- ИСПРАВЛЕННАЯ ФУНКЦИЯ СОЗДАНИЯ ПРАВИЛА ---
   const addRule = async (e) => {
     e.preventDefault()
     if (newRule.catA === newRule.catB) return alert("Выберите разные категории.")
     
-const { data, error } = await supabase
-  .from('assembly_rules') // Имя таблицы в точности как в SQL
-  .insert([{ 
-    category_a: firstId, 
-    category_b: secondId, 
-    is_compatible: false, 
-    description: 'Текст ошибки' 
-  }])
+    try {
+        const { data, error } = await supabase
+          .from('assembly_rules')
+          .insert([{ 
+            category_a_id: newRule.catA, // Правильное имя: с _id
+            category_b_id: newRule.catB, // Правильное имя: с _id
+            is_compatible: false, // Всегда false, так как это правило несовместимости
+            description: newRule.message, // Текст ошибки, который увидит юзер
+            level: newRule.severity // Уровень (error/warning)
+          }])
           .select()
-        .single()
+          .single()
         
-    if (error) alert(error.message)
-    else {
-        setRules([...rules, data])
-        setNewRule({ ...newRule, message: '' }) 
+        if (error) throw error
+
+        setRules([data, ...rules])
+        setNewRule(prev => ({ ...prev, message: '' })) 
+        alert("Правило успешно скомпилировано!")
+
+    } catch (e) {
+        alert("Ошибка создания правила: " + e.message)
+        console.error(e)
     }
   }
 
   const deleteRule = async (id) => {
+    if(!window.confirm("Удалить правило?")) return
     await supabase.from('assembly_rules').delete().eq('id', id)
     setRules(rules.filter(r => r.id !== id))
   }
 
-  // Helper
+  // Helper для получения имени категории по ID
   const getCatName = (id) => categories.find(c => c.id === id)?.name || id
 
   return (
@@ -153,7 +164,7 @@ const { data, error } = await supabase
                 
                 {rules.map(rule => (
                     <div key={rule.id} className="group flex justify-between items-start bg-zinc-900 p-4 border-l-2 hover:bg-zinc-800 transition"
-                         style={{ borderColor: rule.severity === 'error' ? '#ef4444' : rule.severity === 'warning' ? '#f59e0b' : '#10b981' }}>
+                         style={{ borderColor: rule.level === 'error' ? '#ef4444' : rule.level === 'warning' ? '#f59e0b' : '#10b981' }}>
                         
                         <div className="flex-1">
                             <div className="flex items-center gap-2 text-xs font-bold text-zinc-300 mb-1">
@@ -162,16 +173,16 @@ const { data, error } = await supabase
                                 <span>{getCatName(rule.category_b_id)}</span>
                             </div>
                             <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-wide">
-                                Ответ: <span className="text-zinc-400">"{rule.message}"</span>
+                                Ответ: <span className="text-zinc-400">"{rule.description}"</span>
                             </div>
                         </div>
 
                         <div className="flex flex-col items-end gap-2 ml-4">
                             <span className={`text-[9px] uppercase font-bold px-1.5 py-0.5 border ${
-                                rule.severity === 'error' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 
-                                rule.severity === 'warning' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                rule.level === 'error' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 
+                                rule.level === 'warning' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                             }`}>
-                                {rule.severity}
+                                {rule.level}
                             </span>
                             <button onClick={() => deleteRule(rule.id)} className="text-zinc-600 hover:text-red-500 text-[10px] uppercase font-bold opacity-0 group-hover:opacity-100 transition">
                                 Удалить
