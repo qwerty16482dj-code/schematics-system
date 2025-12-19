@@ -32,35 +32,43 @@ export default function RuleManager() {
   }
 
   // --- ИСПРАВЛЕННАЯ ФУНКЦИЯ СОЗДАНИЯ ПРАВИЛА ---
-  const addRule = async (e) => {
-    e.preventDefault()
-    if (newRule.catA === newRule.catB) return alert("Выберите разные категории.")
+const addRule = async (e) => {
+    e.preventDefault() // <-- Важно: предотвращает перезагрузку страницы
     
+    // 1. Проверка: нельзя создать правило для одной и той же категории
+    if (newRule.catA === newRule.catB) {
+        return alert("Ошибка: Выберите две РАЗНЫЕ категории (например, Дисплей и Корпус).")
+    }
+    
+    // 2. Проверка: заполнено ли сообщение
+    if (!newRule.message) return alert("Введите сообщение об ошибке!")
+
     try {
+        // Отправка в Supabase
         const { data, error } = await supabase
           .from('assembly_rules')
           .insert([{ 
-            category_a_id: newRule.catA, // Правильное имя: с _id
-            category_b_id: newRule.catB, // Правильное имя: с _id
-            is_compatible: false, // Всегда false, так как это правило несовместимости
-            description: newRule.message, // Текст ошибки, который увидит юзер
-            level: newRule.severity // Уровень (error/warning)
+            category_a_id: newRule.catA, // <-- ПРОВЕРЬ: здесь должно быть newRule.catA
+            category_b_id: newRule.catB, // <-- ПРОВЕРЬ: здесь должно быть newRule.catB
+            is_compatible: false,
+            description: newRule.message,
+            level: newRule.severity
           }])
           .select()
           .single()
         
         if (error) throw error
 
+        // Успех
         setRules([data, ...rules])
         setNewRule(prev => ({ ...prev, message: '' })) 
-        alert("Правило успешно скомпилировано!")
+        alert("Правило успешно создано!")
 
     } catch (e) {
-        alert("Ошибка создания правила: " + e.message)
-        console.error(e)
+        console.error(e) // Покажет ошибку в консоли
+        alert("Ошибка: " + e.message)
     }
   }
-
   const deleteRule = async (id) => {
     if(!window.confirm("Удалить правило?")) return
     await supabase.from('assembly_rules').delete().eq('id', id)

@@ -8,8 +8,16 @@ export default function SchematicEditor() {
   const [devices, setDevices] = useState([])
   const [categories, setCategories] = useState([])
 
-  const [newDevice, setNewDevice] = useState({ name: '', type: 'smartphone', slug: '', image_url: '', schematic_url: '' })
+  // Состояние формы создания
+  const [newDevice, setNewDevice] = useState({ 
+    name: '', 
+    type: 'smartphone', 
+    slug: '', 
+    image_url: '', 
+    schematic_url: '' 
+  })
   
+  // Состояние редактора
   const [selectedDevice, setSelectedDevice] = useState(null)
   const [schematic, setSchematic] = useState(null)
   const [zones, setZones] = useState([])
@@ -18,58 +26,146 @@ export default function SchematicEditor() {
 
   const imgRef = useRef(null)
 
-  useEffect(() => { fetchRequests(); fetchDevices(); fetchCategories() }, [])
+  useEffect(() => { 
+    fetchRequests()
+    fetchDevices()
+    fetchCategories() 
+  }, [])
 
-  async function fetchRequests() { const { data } = await supabase.from('device_requests').select('*').order('created_at', { ascending: false }); setRequests(data || []) }
-  async function fetchDevices() { const { data } = await supabase.from('devices').select('*').order('name'); setDevices(data || []) }
-  async function fetchCategories() { const { data } = await supabase.from('part_categories').select('*').order('name'); setCategories(data || []); if(data?.length) setSelectedCatId(data[0].id) }
+  async function fetchRequests() { 
+    const { data } = await supabase.from('device_requests').select('*').order('created_at', { ascending: false })
+    setRequests(data || []) 
+  }
+  
+  async function fetchDevices() { 
+    const { data } = await supabase.from('devices').select('*').order('name')
+    setDevices(data || []) 
+  }
+  
+  async function fetchCategories() { 
+    const { data } = await supabase.from('part_categories').select('*').order('name')
+    setCategories(data || [])
+    if(data?.length) setSelectedCatId(data[0].id) 
+  }
 
+  // --- СОЗДАНИЕ УСТРОЙСТВА ---
   const handleCreateDevice = async (e) => {
     e.preventDefault()
-    if (!newDevice.name || !newDevice.slug || !newDevice.schematic_url) return alert("Заполните обязательные поля")
+    if (!newDevice.name || !newDevice.slug || !newDevice.schematic_url) {
+        return alert("Заполните: Название, Slug и Ссылку на схему")
+    }
     
     try {
-        const { data: dev, error: devErr } = await supabase.from('devices').insert({ name: newDevice.name, type: newDevice.type, slug: newDevice.slug, image_url: newDevice.image_url }).select().single()
+        // 1. Создаем устройство (Теперь поля image_url и type существуют в базе)
+        const { data: dev, error: devErr } = await supabase
+            .from('devices')
+            .insert({ 
+                name: newDevice.name, 
+                type: newDevice.type, 
+                slug: newDevice.slug, 
+                image_url: newDevice.image_url 
+            })
+            .select()
+            .single()
+        
         if (devErr) throw devErr
-        const { error: schErr } = await supabase.from('schematics').insert({ device_id: dev.id, image_url: newDevice.schematic_url, width: 800, height: 600 })
+
+        // 2. Создаем схему
+        const { error: schErr } = await supabase
+            .from('schematics')
+            .insert({ 
+                device_id: dev.id, 
+                image_url: newDevice.schematic_url, 
+                width: 800, 
+                height: 600 
+            })
+        
         if (schErr) throw schErr
 
-        alert("Система успешно создана")
+        alert("Система успешно создана!")
         setNewDevice({ name: '', type: 'smartphone', slug: '', image_url: '', schematic_url: '' })
         fetchDevices()
     } catch (error) {
-        alert("Ошибка: " + error.message)
+        console.error(error)
+        alert("Ошибка создания: " + error.message)
     }
   }
 
-  const handleDeleteDevice = async (id) => { if(!confirm("Удалить запись?")) return; await supabase.from('devices').delete().eq('id', id); fetchDevices() }
+  // --- УДАЛЕНИЕ УСТРОЙСТВА ---
+  const handleDeleteDevice = async (id) => { 
+      if(!window.confirm("Удалить запись и все связанные данные?")) return; 
+      
+      try {
+          const { error } = await supabase.from('devices').delete().eq('id', id);
+          if (error) throw error
+          
+          fetchDevices()
+          
+          // Если мы редактировали это устройство, сбрасываем редактор
+          if (selectedDevice?.id === id) {
+              setSelectedDevice(null)
+              setSchematic(null)
+              setActiveTab('DEVICES')
+          }
+      } catch (e) {
+          alert("Ошибка удаления: " + e.message)
+      }
+  }
 
+  // --- ВЫБОР ДЛЯ РЕДАКТИРОВАНИЯ ---
   const selectDeviceToEdit = async (dev) => {
-    setSelectedDevice(dev); setActiveTab('EDITOR'); setDrawPoints([]); setSchematic(null) 
+    setSelectedDevice(dev)
+    setActiveTab('EDITOR')
+    setDrawPoints([]) 
+    setSchematic(null) 
+    
     const { data: schem } = await supabase.from('schematics').select('*').eq('device_id', dev.id).maybeSingle()
-    if (!schem) return alert("Схема не найдена")
+    if (!schem) {
+        alert("Схема не найдена. Создайте её заново.")
+        return
+    }
     setSchematic(schem)
+    
     const { data: zns } = await supabase.from('interactive_zones').select('*, part_categories(name)').eq('schematic_id', schem.id)
     setZones(zns || [])
   }
 
+  // --- РИСОВАНИЕ ЗОН ---
   const handleImageClick = (e) => {
     if (!schematic) return
     const rect = imgRef.current.getBoundingClientRect()
-    const x = e.clientX - rect.left; const y = e.clientY - rect.top
-    const scaleX = 800 / rect.width; const scaleY = 600 / rect.height
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    const scaleX = 800 / rect.width
+    const scaleY = 600 / rect.height
     setDrawPoints([...drawPoints, [Math.round(x * scaleX), Math.round(y * scaleY)]])
   }
 
   const saveZone = async () => {
     if (drawPoints.length < 3) return alert("Нужно минимум 3 точки")
     const d = drawPoints.map((p, i) => (i === 0 ? `M${p[0]} ${p[1]}` : `L${p[0]} ${p[1]}`)).join(' ') + ' Z'
-    await supabase.from('interactive_zones').insert({ schematic_id: schematic.id, part_category_id: selectedCatId, svg_path: d })
-    const { data: zns } = await supabase.from('interactive_zones').select('*, part_categories(name)').eq('schematic_id', schematic.id)
-    setZones(zns || []); setDrawPoints([])
+    
+    try {
+        await supabase.from('interactive_zones').insert({ 
+            schematic_id: schematic.id, 
+            part_category_id: selectedCatId, 
+            svg_path: d 
+        })
+        
+        // Обновляем зоны
+        const { data: zns } = await supabase.from('interactive_zones').select('*, part_categories(name)').eq('schematic_id', schematic.id)
+        setZones(zns || [])
+        setDrawPoints([])
+    } catch(e) {
+        alert("Ошибка сохранения зоны: " + e.message)
+    }
   }
 
-  const deleteZone = async (id) => { if (!confirm('Удалить зону?')) return; await supabase.from('interactive_zones').delete().eq('id', id); setZones(zones.filter(z => z.id !== id)) }
+  const deleteZone = async (id) => { 
+      if (!window.confirm('Удалить зону?')) return; 
+      await supabase.from('interactive_zones').delete().eq('id', id); 
+      setZones(zones.filter(z => z.id !== id)) 
+  }
 
   return (
     <div className="h-screen bg-zinc-950 text-white font-sans flex flex-col overflow-hidden pt-16">
@@ -103,7 +199,7 @@ export default function SchematicEditor() {
                     {requests.map(req => (
                         <div key={req.id} className="bg-zinc-900 border border-white/5 p-4 flex justify-between items-center">
                             <div>
-                                <span className="font-bold text-white block text-sm">{req.device_name}</span>
+                                <span className="font-bold text-white block text-sm">{req.name}</span>
                                 <span className="text-zinc-500 text-xs">{req.notes}</span>
                             </div>
                             <div className="text-[10px] text-zinc-700 font-mono">{new Date(req.created_at).toLocaleDateString()}</div>
@@ -137,8 +233,8 @@ export default function SchematicEditor() {
                     <form onSubmit={handleCreateDevice} className="space-y-4">
                         <input className="w-full bg-black border border-white/10 p-3 text-xs text-white outline-none focus:border-white/30" placeholder="Название (напр. iPhone 15)" value={newDevice.name} onChange={e => setNewDevice({...newDevice, name: e.target.value})} />
                         <input className="w-full bg-black border border-white/10 p-3 text-xs text-white outline-none focus:border-white/30" placeholder="Slug (напр. iphone-15)" value={newDevice.slug} onChange={e => setNewDevice({...newDevice, slug: e.target.value})} />
-                        <input className="w-full bg-black border border-white/10 p-3 text-xs text-white outline-none focus:border-white/30" placeholder="Ссылка на обложку" value={newDevice.image_url} onChange={e => setNewDevice({...newDevice, image_url: e.target.value})} />
-                        <input className="w-full bg-black border border-emerald-900/30 p-3 text-xs text-white outline-none focus:border-emerald-500/50" placeholder="Ссылка на схему" value={newDevice.schematic_url} onChange={e => setNewDevice({...newDevice, schematic_url: e.target.value})} />
+                        <input className="w-full bg-black border border-white/10 p-3 text-xs text-white outline-none focus:border-white/30" placeholder="Ссылка на обложку (Image URL)" value={newDevice.image_url} onChange={e => setNewDevice({...newDevice, image_url: e.target.value})} />
+                        <input className="w-full bg-black border border-emerald-900/30 p-3 text-xs text-white outline-none focus:border-emerald-500/50" placeholder="Ссылка на схему (Blueprint URL)" value={newDevice.schematic_url} onChange={e => setNewDevice({...newDevice, schematic_url: e.target.value})} />
                         <button className="w-full bg-white text-black font-bold text-[10px] py-3 uppercase hover:bg-zinc-200 transition">ИНИЦИАЛИЗИРОВАТЬ</button>
                     </form>
                 </div>
@@ -155,7 +251,7 @@ export default function SchematicEditor() {
                             <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'radial-gradient(#fff 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
                             
                             <div className="relative border border-white/10" style={{ height: '600px', width: '800px' }}>
-                                <img ref={imgRef} src={schematic.image_url} className="w-full h-full object-contain pointer-events-none opacity-50 grayscale invert" />
+                                <img ref={imgRef} src={schematic.image_url} className="w-full h-full object-contain pointer-events-none opacity-50 grayscale invert" alt="Blueprint" />
                                 <svg className="absolute inset-0 w-full h-full" viewBox="0 0 800 600" onClick={handleImageClick}>
                                     {zones.map(z => (
                                         <path key={z.id} d={z.svg_path} fill="rgba(255, 255, 255, 0.1)" stroke="white" strokeWidth="1" onClick={(e) => { e.stopPropagation(); deleteZone(z.id) }} className="hover:fill-red-500/50 cursor-pointer" />
