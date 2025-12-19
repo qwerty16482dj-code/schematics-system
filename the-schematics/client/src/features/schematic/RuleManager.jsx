@@ -33,15 +33,15 @@ export default function RuleManager() {
     e.preventDefault()
     if (newRule.catA === newRule.catB) return alert("Выберите разные категории.")
     
-    const { data, error } = await supabase
-        .from('assembly_rules')
-        .insert({
-            category_a_id: newRule.catA,
-            category_b_id: newRule.catB,
-            severity: newRule.severity,
-            message: newRule.message
-        })
-        .select()
+const { data, error } = await supabase
+  .from('assembly_rules') // Имя таблицы в точности как в SQL
+  .insert([{ 
+    category_a: firstId, 
+    category_b: secondId, 
+    is_compatible: false, 
+    description: 'Текст ошибки' 
+  }])
+          .select()
         .single()
         
     if (error) alert(error.message)

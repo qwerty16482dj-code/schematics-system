@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useNavigate } from 'react-router-dom'
-import { API_URL } from '../../config' // <-- ВАЖНО: ПРАВИЛЬНЫЙ ИМПОРТ
+// API_URL удален, так как мы работаем напрямую с базой
 
 // Иконки
 const Icons = {
@@ -51,39 +51,68 @@ export default function Profile() {
     } catch (e) { console.error(e) } finally { setLoading(false) }
   }
 
+  // --- ИСПРАВЛЕННАЯ ФУНКЦИЯ СОЗДАНИЯ МАГАЗИНА ---
   const createShop = async () => {
     const name = prompt("Название магазина:")
     if (!name) return
     try {
-        // ИСПОЛЬЗУЕМ API_URL
-        const res = await fetch(`${API_URL}/api/vendor/create`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user.id, name }) })
-        const result = await res.json()
-        if (result.success) loadProfileData()
-        else alert(result.error)
-    } catch (e) { alert("Ошибка сети") }
+        const { error } = await supabase
+            .from('vendors')
+            .insert({ 
+                owner_id: user.id, 
+                name: name,
+                rating: 5.0 
+            })
+            
+        if (error) throw error
+        loadProfileData()
+    } catch (e) { 
+        alert("Ошибка создания магазина: " + e.message) 
+    }
   }
 
+  // --- ИСПРАВЛЕННАЯ ФУНКЦИЯ ДОБАВЛЕНИЯ ТОВАРА ---
   const addProduct = async (e) => {
     e.preventDefault()
     if (!vendor) return
+    
     try {
-        // ИСПОЛЬЗУЕМ API_URL
-        const res = await fetch(`${API_URL}/api/vendor/add-product`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ vendorId: vendor.id, categoryId: newProduct.catId, price: newProduct.price, condition: newProduct.cond, stock: newProduct.stock })
-        })
-        const result = await res.json()
-        if (result.success) { alert("Лот добавлен"); loadProfileData() } else alert(result.error)
-    } catch (e) { alert("Ошибка сети") }
+        const { error } = await supabase
+            .from('market_offers')
+            .insert({
+                vendor_id: vendor.id,
+                part_category_id: newProduct.catId, // Важно: правильное имя поля в базе
+                price: parseFloat(newProduct.price),
+                condition: newProduct.cond,
+                stock: parseInt(newProduct.stock)
+            })
+
+        if (error) throw error
+        
+        alert("Лот успешно добавлен!")
+        setNewProduct(prev => ({ ...prev, price: '', stock: 1 })) // Сброс формы
+        loadProfileData()
+    } catch (e) { 
+        console.error(e)
+        alert("Ошибка добавления товара: " + e.message) 
+    }
   }
 
+  // --- ИСПРАВЛЕННАЯ ФУНКЦИЯ УДАЛЕНИЯ ТОВАРА ---
   const deleteProduct = async (id) => {
-    if (!window.confirm("Удалить?")) return
+    if (!window.confirm("Удалить этот лот?")) return
     try {
-        // ИСПОЛЬЗУЕМ API_URL
-        await fetch(`${API_URL}/api/vendor/delete-product`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ offerId: id }) })
+        const { error } = await supabase
+            .from('market_offers')
+            .delete()
+            .eq('id', id)
+            
+        if (error) throw error
         loadProfileData()
-    } catch (e) { console.error(e) }
+    } catch (e) { 
+        console.error(e)
+        alert("Ошибка удаления") 
+    }
   }
 
   const handleLogout = async () => { await supabase.auth.signOut(); navigate('/login') }

@@ -117,11 +117,11 @@ export default function SchematicViewer() {
     try {
         // Запрашиваем конфликты напрямую из Supabase
         const { data: conflicts, error } = await supabase
-            .from('assembly_rules')
-            .select('*')
-            .in('category_a', catIds)
-            .in('category_b', catIds)
-            .eq('is_compatible', false)
+    .from('assembly_rules')
+    .select('*')
+    .in('category_a_id', catIds) // Добавь _id здесь
+    .in('category_b_id', catIds) // Добавь _id здесь
+    .eq('is_compatible', false)
 
         if (error) throw error
 
